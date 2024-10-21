@@ -12,7 +12,6 @@ import torch.nn.functional as F
 from transformers.cache_utils import Cache
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
-from QEfficient.utils.constants import NUM_LOGITS_TO_KEEP
 from QEfficient.transformers.modeling_spd_utils import filter_hidden_states
 
 def tlm_forward(
@@ -29,7 +28,7 @@ def tlm_forward(
     output_hidden_states: Optional[bool] = None,
     return_dict: Optional[bool] = None,
     cache_position: Optional[torch.LongTensor] = None,
-    #num_logits_to_keep: Optional[torch.LongTensor] = None,
+    #num_logits_to_keep: Optional[torch.LongTensor] = None, # explicit passing is not currently supported
 ) -> Union[Tuple, CausalLMOutputWithPast]:
     r"""
     Args:

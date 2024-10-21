@@ -21,7 +21,7 @@ from QEfficient.exporter.export_utils import export_onnx, fix_onnx_fp16, generat
 from QEfficient.transformers.modeling_utils import get_lists_of_cb_qeff_models
 from QEfficient.transformers.models.modeling_auto import QEFFAutoModelForCausalLM
 from QEfficient.utils import load_hf_tokenizer
-from QEfficient.utils.constants import QEFF_MODELS_DIR, NUM_LOGITS_TO_KEEP, Constants
+from QEfficient.utils.constants import QEFF_MODELS_DIR, Constants
 from QEfficient.utils.generate_inputs import InputHandler
 from QEfficient.utils.logging_utils import logger
 
@@ -196,7 +196,7 @@ def export_kvstyle_transformed_model_to_onnx(
     onnx_dir_path: str,
     seq_len: int,
     full_batch_size: Optional[int] = None,
-    num_logits_to_keep: Optional[int] = NUM_LOGITS_TO_KEEP,
+    num_speculative_tokens: Optional[int] = None,
 ) -> str:
     # Disabling requires_grad on all parameters
     for _, p in enumerate(transformed_model.parameters()):
@@ -205,13 +205,15 @@ def export_kvstyle_transformed_model_to_onnx(
     if seq_len <= 0:
         raise ValueError(f"Need seq_len to be greater than zero, got seq_len={seq_len}")
 
-    # Implicitly pass "num_logits_to_keep" if defined and \
-    # assert prompt_len >= num_logits_to_keep
+    # Implicitly pass "num_speculative_tokens" if defined and \
+    # assert prompt_len >= num_speculative_tokens
     prompt_len = Constants.PROMPT_LEN
-    if num_logits_to_keep is not None:
-        setattr(transformed_model, "num_logits_to_keep", num_logits_to_keep+1)
-        if prompt_len < num_logits_to_keep+1:
-            prompt_len *= math.ceil((num_logits_to_keep+1) / prompt_len)
+    num_logits_to_keep = None
+    if num_speculative_tokens is not None:
+        num_logits_to_keep = num_speculative_tokens+1
+        setattr(transformed_model, "num_logits_to_keep", num_logits_to_keep)
+        if prompt_len < num_logits_to_keep:
+            prompt_len *= math.ceil((num_logits_to_keep) / prompt_len)
 
     # Preprocess inputs
     # Build inputs for prefill
@@ -331,7 +333,7 @@ def export_for_cloud(
     onnx_dir_path: str,
     seq_length: int = Constants.SEQ_LEN,
     full_batch_size: Optional[int] = None,
-    num_logits_to_keep: Optional[int] = NUM_LOGITS_TO_KEEP,
+    num_speculative_tokens: Optional[int] = None,
 ) -> str:
     # Check if model architecture is supported for continuous batching.
     if full_batch_size and qeff_model.model.config.architectures[0] not in get_lists_of_cb_qeff_models.architectures:
@@ -348,7 +350,7 @@ def export_for_cloud(
             onnx_dir_path=onnx_dir_path,
             seq_length=seq_length,
             full_batch_size=full_batch_size,
-            num_logits_to_keep=num_logits_to_keep
+            num_speculative_tokens=num_speculative_tokens
         )
     else:
         raise NotImplementedError(
@@ -363,7 +365,7 @@ def export_lm_model_for_cloud(
     onnx_dir_path: str,
     seq_length: int,
     full_batch_size: Optional[int] = None,
-    num_logits_to_keep: Optional[int] = NUM_LOGITS_TO_KEEP,
+    num_speculative_tokens: Optional[int] = None,
 ) -> str:
     if os.path.exists(onnx_dir_path):
         logger.warning(f"Overriding {onnx_dir_path}")
@@ -377,7 +379,7 @@ def export_lm_model_for_cloud(
             onnx_dir_path=onnx_dir_path,
             seq_len=seq_length,
             full_batch_size=full_batch_size,
-            num_logits_to_keep=num_logits_to_keep,
+            num_speculative_tokens=num_speculative_tokens,
         )  # type: ignore
 
     else:
@@ -403,7 +405,7 @@ def qualcomm_efficient_converter(
     kv: bool = True,
     form_factor: str = "cloud",
     full_batch_size: Optional[int] = None,
-    num_logits_to_keep: Optional[int] = NUM_LOGITS_TO_KEEP,
+    num_speculative_tokens: Optional[int] = None,
 ) -> Tuple[str, str]:
     """
     This method is an alias for ``QEfficient.export``.
@@ -484,7 +486,7 @@ def qualcomm_efficient_converter(
             onnx_dir_path=onnx_dir_path,
             seq_length=seq_length,
             full_batch_size=full_batch_size,
-            num_logits_to_keep=num_logits_to_keep,
+            num_speculative_tokens=num_speculative_tokens,
         )
         return onnx_dir_path, generated_onnx_model_path
     else:

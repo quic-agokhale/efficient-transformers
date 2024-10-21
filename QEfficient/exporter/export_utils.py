@@ -281,9 +281,6 @@ def generate_input_files(
     # inputFiles
     os.makedirs(input_files_path, exist_ok=True)
     filenames = []
-    if "num_logits_to_keep" in input_names:
-        idx = input_names.index("num_logits_to_keep")
-        del input_names[idx]
 
     for name in input_names:
         # We can't directly iterate with inputs.items() because

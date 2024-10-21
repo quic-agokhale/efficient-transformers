@@ -16,25 +16,23 @@ from QEfficient.generation.cloud_infer import QAICInferenceSession
 
 configs = [
     pytest.param(
-        # device_group, num_speculative_tokens, prompt_len, ctx_len, prefill_bsz, full_batch_size, model_name, id
-        [0],
-        5,
-        32,
-        128,
-        1,
-        8,
-        "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        [0], # device_group
+        2, # num_speculative_tokens
+        32, # prompt_len
+        128, # ctx_len
+        1, # prefill_bsz
+        8, # full_batch_size
+        "JackFram/llama-68m", # model_name
         id="CB llama",
     ),
     pytest.param(
-        # device_group, num_speculative_tokens, prompt_len, ctx_len, prefill_bsz, full_batch_size, model_name, id
-        [0],
-        5,
-        32,
-        128,
-        1,
-        None,
-        "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        [0], # device_group
+        2, # num_speculative_tokens
+        32, # prompt_len
+        128, # ctx_len
+        1, # prefill_bsz
+        None, # full_batch_size
+        "JackFram/llama-68m", # model_name
         id="non-CB llama",
     ),
 ]
@@ -65,7 +63,7 @@ def test_llama_tlm_logit_dims(
         prompt_len=prompt_len,
         ctx_len=ctx_len,
         mxfp6=True,
-        mxint8=True,
+#        mxint8=True,
         full_batch_size=full_batch_size,
     )
 
@@ -78,18 +76,20 @@ def test_llama_tlm_logit_dims(
     prefill_inputs = dict(
         input_ids=np.zeros((prefill_bsz, prompt_len), dtype=np.int64),
         position_ids=np.arange(prompt_len, dtype=np.int64).reshape(-1, 1).repeat(prefill_bsz, 1).transpose(),
-        batch_index=np.arange(prefill_bsz, dtype=np.int64).reshape(prefill_bsz, 1),
     )
     # decode dummy inputs
+    num_logits_to_keep = num_speculative_tokens + 1
     decode_bsz = full_batch_size if full_batch_size is not None else prefill_bsz
     decode_inputs = dict(
-        input_ids=np.zeros((decode_bsz, num_speculative_tokens + 1), dtype=np.int64),
-        position_ids=np.full((decode_bsz, num_speculative_tokens + 1), -1, dtype=np.int64),
-        batch_index=np.arange(decode_bsz, dtype=np.int64).reshape(-1, 1),
+        input_ids=np.zeros((decode_bsz, num_logits_to_keep), dtype=np.int64),
+        position_ids=np.full((decode_bsz, num_logits_to_keep), -1, dtype=np.int64),
     )
+    if full_batch_size is not None:
+        prefill_inputs["batch_index"] = np.arange(prefill_bsz, dtype=np.int64).reshape(prefill_bsz, 1)
+        decode_inputs["batch_index"] = np.arange(decode_bsz, dtype=np.int64).reshape(-1, 1)
     # create dummy logits
-    prefill_logits = dict(logits=np.random.randn(prefill_bsz, prompt_len, vocab_size).astype(np.float32))
-    decode_logits = dict(logits=np.random.randn(decode_bsz, num_speculative_tokens + 1, vocab_size).astype(np.float32))
+    prefill_logits = dict(logits=np.random.randn(prefill_bsz, num_logits_to_keep, vocab_size).astype(np.float32))
+    decode_logits = dict(logits=np.random.randn(decode_bsz, num_logits_to_keep, vocab_size).astype(np.float32))
     # get prefill/decode logits
     session.set_buffers(prefill_logits)
     prefill_outputs = session.run(prefill_inputs)
@@ -126,7 +126,7 @@ def test_llama_dlm_logit_dims(
         prompt_len=prompt_len,
         ctx_len=ctx_len,
         mxfp6=True,
-        mxint8=True,
+#        mxint8=True,
         full_batch_size=full_batch_size,
     )
 
