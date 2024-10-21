@@ -16,23 +16,23 @@ from QEfficient.generation.cloud_infer import QAICInferenceSession
 
 configs = [
     pytest.param(
-        [0], # device_group
-        2, # num_speculative_tokens
-        32, # prompt_len
-        128, # ctx_len
-        1, # prefill_bsz
-        8, # full_batch_size
-        "JackFram/llama-68m", # model_name
+        [0],  # device_group
+        2,  # num_speculative_tokens
+        32,  # prompt_len
+        128,  # ctx_len
+        1,  # prefill_bsz
+        8,  # full_batch_size
+        "JackFram/llama-68m",  # model_name
         id="CB llama",
     ),
     pytest.param(
-        [0], # device_group
-        2, # num_speculative_tokens
-        32, # prompt_len
-        128, # ctx_len
-        1, # prefill_bsz
-        None, # full_batch_size
-        "JackFram/llama-68m", # model_name
+        [0],  # device_group
+        2,  # num_speculative_tokens
+        32,  # prompt_len
+        128,  # ctx_len
+        1,  # prefill_bsz
+        None,  # full_batch_size
+        "JackFram/llama-68m",  # model_name
         id="non-CB llama",
     ),
 ]
@@ -63,7 +63,7 @@ def test_llama_tlm_logit_dims(
         prompt_len=prompt_len,
         ctx_len=ctx_len,
         mxfp6=True,
-#        mxint8=True,
+        mxint8=True,
         full_batch_size=full_batch_size,
     )
 
@@ -126,7 +126,7 @@ def test_llama_dlm_logit_dims(
         prompt_len=prompt_len,
         ctx_len=ctx_len,
         mxfp6=True,
-#        mxint8=True,
+        mxint8=True,
         full_batch_size=full_batch_size,
     )
 

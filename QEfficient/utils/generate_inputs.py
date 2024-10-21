@@ -116,12 +116,14 @@ class InputHandler:
         if self.full_batch_size:
             # Create CB inputs (make 1 batch index have proper inputs for decode pass)
             batch_index = torch.arange(1).view(-1, 1)
-            batch_idx_input_ids = pt_outputs.logits.detach().argmax(2)
+            batch_idx_input_ids = pt_outputs.logits.detach().argmax(2) # shape: [batch_size, num_logits_to_keep]
             input_ids = torch.full((self.full_batch_size, decode_len), self.tokenizer.pad_token_id)
             input_ids[batch_index.view(-1)] = batch_idx_input_ids
+
             position_ids = torch.full((self.full_batch_size, decode_len), 0)
             batch_idx_position_ids = torch.arange(decode_len).view(1,-1) + (inputs["position_ids"].max(1, keepdim=True).values + 1)
             position_ids[batch_index.view(-1)] = batch_idx_position_ids
+
             updated_inputs["input_ids"] = input_ids
             updated_inputs["position_ids"] = position_ids
             updated_inputs["batch_index"] = torch.arange(self.full_batch_size).view(-1, 1)
@@ -132,7 +134,7 @@ class InputHandler:
                 batch_size = input_ids.size(0)
                 position_ids = torch.arange(self.num_logits_to_keep).view(1, self.num_logits_to_keep).repeat(batch_size, 1)
             else:
-                input_ids = pt_outputs["logits"].argmax(-1).reshape(-1, 1)
+                input_ids = pt_outputs["logits"].argmax(-1).reshape(-1, 1) # shape: [batch_size, 1]
                 position_ids = inputs["position_ids"].max(1, keepdim=True).values + 1
             updated_inputs["input_ids"] = input_ids
             updated_inputs["position_ids"] = position_ids
