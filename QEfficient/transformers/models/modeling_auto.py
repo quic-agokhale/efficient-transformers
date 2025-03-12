@@ -8,12 +8,12 @@
 import hashlib
 import warnings
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
-from transformers import AutoModel, AutoModelForCausalLM, PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers import AutoModel, AutoModelForCausalLM, PreTrainedTokenizer, PreTrainedTokenizerFast, TextStreamer
 
 import QEfficient
 from QEfficient.base.modeling_qeff import QEFFBaseModel
