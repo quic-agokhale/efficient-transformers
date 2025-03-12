@@ -66,7 +66,14 @@ class QEFFTransformersBase(QEFFBaseModel):
 
     @classmethod
     @with_replaced_quantizers
-    def from_pretrained(cls, pretrained_model_name_or_path: str, is_tlm: bool = False, hidden_size_projections: Optional[Tuple[nn.ModuleList, str]] = None, *args, **kwargs):
+    def from_pretrained(
+        cls,
+        pretrained_model_name_or_path: str,
+        is_tlm: bool = False,
+        hidden_size_projections: Optional[Tuple[nn.ModuleList, str]] = None,
+        *args,
+        **kwargs,
+    ):
         if kwargs.get("attn_implementation", None) not in {None, "eager"}:
             logger.warning('Updating attn_implementation="eager"')
 
@@ -81,7 +88,9 @@ class QEFFTransformersBase(QEFFBaseModel):
                 projs, checkpoint = hidden_size_projections
                 assert isinstance(projs, nn.ModuleList)
                 assert isinstance(checkpoint, str)
-                model.hidden_size_projections = load_checkpoint_and_dispatch(projs, checkpoint=checkpoint, device_map="auto")
+                model.hidden_size_projections = load_checkpoint_and_dispatch(
+                    projs, checkpoint=checkpoint, device_map="auto"
+                )
             elif isinstance(hidden_size_projections, nn.ModuleList):
                 model.hidden_size_projections = hidden_size_projections
             else:
@@ -1332,7 +1341,13 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
     @classmethod
     @with_replaced_quantizers
     def from_pretrained(
-        cls, pretrained_model_name_or_path, continuous_batching: bool = False, is_tlm: bool = False, hidden_size_projections: Optional[Tuple[nn.ModuleList, str]] = None, *args, **kwargs
+        cls,
+        pretrained_model_name_or_path,
+        continuous_batching: bool = False,
+        is_tlm: bool = False,
+        hidden_size_projections: Optional[Tuple[nn.ModuleList, str]] = None,
+        *args,
+        **kwargs,
     ):
         """
         This method serves as the easiest entry point into using QEfficient. The interface is designed to be similar to transformers.AutoModelForCausalLM.

@@ -180,9 +180,7 @@ def multiprojs_spec_decode_inference(
     vocab_size = len(tokenizer)
     # skip inputs/outputs buffers
     session.skip_buffers(set([x for x in session.input_names if x.startswith("past_")]))
-    session.skip_buffers(
-        set([x for x in session.output_names if x.endswith("_RetainedState")])
-    )
+    session.skip_buffers(set([x for x in session.output_names if x.endswith("_RetainedState")]))
 
     is_cb = full_batch_size is not None
     decode_batch_size = full_batch_size if is_cb else prefill_bsz
@@ -197,29 +195,29 @@ def multiprojs_spec_decode_inference(
         p_tok: dict = tokenizer(p, return_tensors="np", padding="max_length", max_length=input_len_padded)
         position_ids = np.where(p_tok.pop("attention_mask"), np.arange(input_len_padded), -1)
         p_tok["position_ids"] = position_ids
-        p_tok["num_logits_to_keep"] = np.zeros((1,1), dtype=np.int64)
+        p_tok["num_logits_to_keep"] = np.zeros((1, 1), dtype=np.int64)
         prompts_tokenized.append(p_tok)
     # create caches to hold generated ids and input prompt lengths
     generated_ids = [[] for i in range(decode_batch_size)]
     input_lengths = [0] * decode_batch_size
     # mock input key "logits" to store the first batch of output logits
-    num_logits_to_keep = num_speculative_tokens + 1 # number of logits to keep
+    num_logits_to_keep = num_speculative_tokens + 1  # number of logits to keep
     precode_inputs = dict(
         input_ids=np.zeros((decode_batch_size, num_logits_to_keep), dtype=np.int64),
         position_ids=np.zeros((decode_batch_size, num_logits_to_keep), dtype=np.int64),
         batch_index=np.arange(decode_batch_size, dtype=np.int64).reshape(-1, 1),
-        num_logits_to_keep=np.zeros((num_logits_to_keep,1), dtype=np.int64),
+        num_logits_to_keep=np.zeros((num_logits_to_keep, 1), dtype=np.int64),
     )
     max_gen_len = [ctx_len] * decode_batch_size
     # setup buffers
-    prefill_logits_ph = np.zeros((prefill_bsz, 1, num_logits_to_keep,vocab_size), dtype=np.float32)
+    prefill_logits_ph = np.zeros((prefill_bsz, 1, num_logits_to_keep, vocab_size), dtype=np.float32)
     session.set_buffers({"logits": prefill_logits_ph})
     e2e_start = perf_counter()
     ttfts = []
     for bi in range(decode_batch_size):
         # assumes that prefill queue will always be popped from the front
         start = perf_counter()
-        logits = run_prefill( # shape: [1, 1, num_logits_to_keep, vocab_size]
+        logits = run_prefill(  # shape: [1, 1, num_logits_to_keep, vocab_size]
             session=session,
             inputs=prompts_tokenized[bi],
             prefill_seq_len=prefill_seq_len,
@@ -227,20 +225,20 @@ def multiprojs_spec_decode_inference(
         )
         ttft = perf_counter() - start
         ttfts.append(ttft)
-        input_ids = logits.argmax(-1).astype(np.int64) # shape: [1, 1, num_logits_to_keep]
-        generated_ids[bi].append(input_ids[0,0,0].item())
+        input_ids = logits.argmax(-1).astype(np.int64)  # shape: [1, 1, num_logits_to_keep]
+        generated_ids[bi].append(input_ids[0, 0, 0].item())
         precode_inputs["input_ids"][bi] = input_ids.flatten()
         input_len = prompts_tokenized[bi]["position_ids"].max(1).item() + 1
-        precode_inputs["position_ids"][bi] = np.arange(
-            input_len, input_len + num_logits_to_keep, dtype=np.int64
-        )
+        precode_inputs["position_ids"][bi] = np.arange(input_len, input_len + num_logits_to_keep, dtype=np.int64)
         # assumes that prefill queue will always be popped from the front
         input_lengths[bi] = input_len
         max_gen_len[bi] -= input_lengths[bi]
     batch_ttft = perf_counter() - e2e_start
 
     # set decode logits buffers
-    precode_logits_ph = np.zeros((decode_batch_size, num_logits_to_keep, num_logits_to_keep, vocab_size), dtype=np.float32)
+    precode_logits_ph = np.zeros(
+        (decode_batch_size, num_logits_to_keep, num_logits_to_keep, vocab_size), dtype=np.float32
+    )
     session.set_buffers({"logits": precode_logits_ph})
     # start decode phase
     valid_batch_indices = np.full(decode_batch_size, True, dtype=bool)
@@ -250,13 +248,15 @@ def multiprojs_spec_decode_inference(
     decode_start = perf_counter()
     while True:
         it += 1
-        # run precode 
-        tlm_outputs = session.run(precode_inputs) 
-        target_logits = tlm_outputs["logits"] # shape: [decode_batch_size, num_logits_to_keep, num_logits_to_keep, vocab_size]
+        # run precode
+        tlm_outputs = session.run(precode_inputs)
+        target_logits = tlm_outputs[
+            "logits"
+        ]  # shape: [decode_batch_size, num_logits_to_keep, num_logits_to_keep, vocab_size]
         # greedy sampling from target model
-        target_tokens = target_logits[:, :, 0].argmax(-1) # shape: [decode_batch_size, num_logits_to_keep]
+        target_tokens = target_logits[:, :, 0].argmax(-1)  # shape: [decode_batch_size, num_logits_to_keep]
         # exact matching between draft and target tokens
-        draft_tokens = precode_inputs["input_ids"][:, 1:] # shape: [decode_batch_size, num_speculative_tokens]
+        draft_tokens = precode_inputs["input_ids"][:, 1:]  # shape: [decode_batch_size, num_speculative_tokens]
         matching = draft_tokens == target_tokens[:, :-1]  # shape: [decode_batch_size, num_speculative_tokens]
         num_tokens_selected = matching.cumprod(axis=1).sum(axis=1) + 1  # shape: [decode_batch_size]
         mean_num_accepted_tokens += num_tokens_selected[valid_batch_indices].mean().item()
@@ -273,7 +273,9 @@ def multiprojs_spec_decode_inference(
         if not valid_batch_indices.any():
             break
         # prepare decode inputs for next decode iteration
-        next_input_ids = target_logits[seq_batch_indices, num_tokens_selected-1].argmax(-1).astype(np.int64) # shape: [decode_batch_size, num_logits_to_keep]
+        next_input_ids = (
+            target_logits[seq_batch_indices, num_tokens_selected - 1].argmax(-1).astype(np.int64)
+        )  # shape: [decode_batch_size, num_logits_to_keep]
         next_position_ids = precode_inputs["position_ids"] + num_tokens_selected[:, np.newaxis]
         next_position_ids[~valid_batch_indices] = -1
         precode_inputs["input_ids"] = next_input_ids
@@ -318,27 +320,38 @@ def optional_int(x):
         return None
     return int(x)
 
+
 def comma_separated_ints(x: str):
     return [int(qid) for qid in x.split(",")]
+
 
 def arg_parse():
     parser = ArgumentParser(description="Draft-based SpD Inference")
     parser.add_argument("--prompts", action="append", default=None, help="Input prompt(s)")
-    parser.add_argument("--num-speculative-tokens", type=int, default=3, help="Number of speculative tokens (defines number of hidden size projections)")
+    parser.add_argument(
+        "--num-speculative-tokens",
+        type=int,
+        default=3,
+        help="Number of speculative tokens (defines number of hidden size projections)",
+    )
     parser.add_argument("--prefill-seq-len", type=int, default=32, help="Prefill sequence length")
     parser.add_argument("--ctx-len", type=int, default=128, help="Context length")
     parser.add_argument("--prefill-bsz", type=int, default=1, help="Prefill batch size")
     parser.add_argument("--proj-num-layers", type=int, default=1, help="Hidden size projection number of layers.")
     parser.add_argument("--proj-checkpoint", type=str, default=None, help="Hidden size projection checkpoint.")
     parser.add_argument(
-        "--pretrained-model-name-or-path", type=str, default="TinyLlama/TinyLlama-1.1B-Chat-v1.0", help="Target model name"
+        "--pretrained-model-name-or-path",
+        type=str,
+        default="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
+        help="Target model name",
     )
     parser.add_argument("--full-batch-size", type=optional_int, default=None, help="Full batch size")
     parser.add_argument("--device-group", type=comma_separated_ints, default="0", help="device QIDs")
     args = parser.parse_args()
     return args
 
-class ResBlock(nn.Module): # Res block for Turbo LoRA projection heads
+
+class ResBlock(nn.Module):  # Res block for Turbo LoRA projection heads
     """
     A Residual Block module.
 
@@ -370,17 +383,19 @@ class ResBlock(nn.Module): # Res block for Turbo LoRA projection heads
         return x + self.act(self.linear(x))
 
 
-def get_session(pretrained_model_name_or_path, 
-                device_group, 
-                prefill_seq_len, 
-                ctx_len, 
-                full_batch_size = None,
-                num_speculative_tokens = 3, 
-                proj_num_layers = 1,
-                proj_checkpoint = None):
+def get_session(
+    pretrained_model_name_or_path,
+    device_group,
+    prefill_seq_len,
+    ctx_len,
+    full_batch_size=None,
+    num_speculative_tokens=3,
+    proj_num_layers=1,
+    proj_checkpoint=None,
+):
     # define post-attention hidden size projections
     hidden_size = AutoConfig.from_pretrained(pretrained_model_name_or_path).hidden_size
-    projs = nn.ModuleList( 
+    projs = nn.ModuleList(
         [
             nn.Sequential(
                 *([ResBlock(hidden_size)] * proj_num_layers),
@@ -394,11 +409,12 @@ def get_session(pretrained_model_name_or_path,
     else:
         hidden_size_projections = projs
     is_cb = full_batch_size is not None
-    qeff_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path, 
-                                                      continuous_batching=is_cb, 
-                                                      is_tlm=True,
-                                                      hidden_size_projections=hidden_size_projections,
-                                                      )
+    qeff_model = AutoModelForCausalLM.from_pretrained(
+        pretrained_model_name_or_path,
+        continuous_batching=is_cb,
+        is_tlm=True,
+        hidden_size_projections=hidden_size_projections,
+    )
     num_devices = len(device_group)
     model_qpc_path: str = qeff_model.compile(
         num_cores=16,
@@ -419,23 +435,27 @@ def main():
     args = arg_parse()
     if args.prompts is None:
         args.prompts = Constants.INPUT_STR
-    session = get_session(pretrained_model_name_or_path=args.pretrained_model_name_or_path,
-                          device_group=args.device_group, 
-                          prefill_seq_len=args.prefill_seq_len, 
-                          ctx_len=args.ctx_len, 
-                          full_batch_size=args.full_batch_size, 
-                          proj_num_layers=args.proj_num_layers,
-                          num_speculative_tokens=args.num_speculative_tokens,
-                          proj_checkpoint=args.proj_checkpoint)
+    session = get_session(
+        pretrained_model_name_or_path=args.pretrained_model_name_or_path,
+        device_group=args.device_group,
+        prefill_seq_len=args.prefill_seq_len,
+        ctx_len=args.ctx_len,
+        full_batch_size=args.full_batch_size,
+        proj_num_layers=args.proj_num_layers,
+        num_speculative_tokens=args.num_speculative_tokens,
+        proj_checkpoint=args.proj_checkpoint,
+    )
     args.session = session
-    exec_info = multiprojs_spec_decode_inference(args.prompts,
-                                                 args.num_speculative_tokens,
-                                                 args.prefill_seq_len,
-                                                 args.ctx_len,
-                                                 args.prefill_bsz,
-                                                 args.pretrained_model_name_or_path,
-                                                 args.full_batch_size,
-                                                 args.session)
+    exec_info = multiprojs_spec_decode_inference(
+        args.prompts,
+        args.num_speculative_tokens,
+        args.prefill_seq_len,
+        args.ctx_len,
+        args.prefill_bsz,
+        args.pretrained_model_name_or_path,
+        args.full_batch_size,
+        args.session,
+    )
     print(exec_info)
     prompts = exec_info.prompts
     generated_texts = exec_info.generated_texts
@@ -445,4 +465,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
